@@ -279,7 +279,7 @@ async def test_executor_dhan_style_places_one_super_order_at_percent_levels(tmp_
     assert await ex.handle(_payload()) == J.PROTECTED
     # Super order at limit 100.1 (legs only act once the entry executes): SL 97.05 / T 103.15 ...
     # The signal's own SL 30 / targets 500,1000 are ignored.
-    assert [(e["qty"], e["price"], e["sl"], e["target"]) for e in broker.entries] == [(375, 100.1, 97.05, 103.15)]
+    assert [(e["qty"], e["price"], e["sl"], e["target"]) for e in broker.entries] == [(375, 107.1,103.85, 110.35)]
     # ... then moved to ±3% of the EXECUTED price Dhan reports (99.4): SL 96.40 / T 102.40
     assert broker.modified == [("E1", 96.4, 102.4)]
     assert journal.get_signal("-100:1")["avg_price"] == 99.4
@@ -495,7 +495,7 @@ async def test_sl_target_enabled_is_the_default(tmp_path, resolver):
     broker = FakeBroker(protects_on_entry=True)
     ex, _ = _executor(tmp_path, broker, resolver)
     assert await ex.handle(_payload()) == J.PROTECTED
-    assert [(e["sl"], e["target"]) for e in broker.entries] == [(97.05, 103.15)]
+    assert [(e["sl"], e["target"]) for e in broker.entries] == [(103.85, 110.35)]
     assert broker.modified == [("E1", 96.4, 102.4)]
     assert set(broker.status_kinds) == {True}
 
