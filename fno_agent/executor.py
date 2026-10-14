@@ -132,7 +132,7 @@ class FnOExecutor:
 
     contract = self.resolver.resolve(sig.symbol, sig.strike, sig.option_type,
                                          sig.expiry_month, sig.expiry_day, today=now.date())
-        size = size_position(self.s.capital_per_trade, contract.lot_size, sig.entry_max * 1.03, self.s.max_lots)
+          size = size_position(self.s.capital_per_trade, contract.lot_size, sig.entry_max * 1.03, self.s.max_lots)
         if size.lots == 0:
             return await self._reject(
                 sid, f"1 lot of {contract.describe()} costs ₹{size.cost_per_lot:,.0f} "
