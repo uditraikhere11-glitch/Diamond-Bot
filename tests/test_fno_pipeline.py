@@ -318,4 +318,4 @@ async def test_executor_no_fill_cancels(tmp_path, resolver):
 async def test_executor_skips_chase_budget_and_dedups(tmp_path, resolver):
     ex, _ = _executor(tmp_path, FakeBroker(ltp=110.0), resolver)  # > 105 * 1.03
     assert await ex.handle(_payload(sid="a")) == J.REJECTED
-    assert await ex.handle(_payload(sid="a")) == "DU
+    assert await ex.handle(_payload(sid="a")) == "DUPLICATE"
