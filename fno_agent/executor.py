@@ -130,9 +130,9 @@ class FnOExecutor:
         if self.s.enforce_market_hours and not self.s.dry_run and not is_market_open(now, self.holidays):
             return await self._reject(sid, f"market closed ({now:%a %H:%M} IST): {desc}")
 
-        contract = self.resolver.resolve(sig.symbol, sig.strike, sig.option_type,
+    contract = self.resolver.resolve(sig.symbol, sig.strike, sig.option_type,
                                          sig.expiry_month, sig.expiry_day, today=now.date())
-        size = size_position(self.s.capital_per_trade, contract.lot_size, sig.entry_max * 1.02, self.s.max_lots)
+        size = size_position(self.s.capital_per_trade, contract.lot_size, sig.entry_max * 1.03, self.s.max_lots)
         if size.lots == 0:
             return await self._reject(
                 sid, f"1 lot of {contract.describe()} costs ₹{size.cost_per_lot:,.0f} "
@@ -144,13 +144,13 @@ class FnOExecutor:
             if ltp > sig.entry_max * (1 + self.s.chase_pct / 100):
                 return await self._reject(sid, f"missed entry: LTP {ltp} > {sig.entry_max} +{self.s.chase_pct}% ({desc})")
             
-            # CHANGED: Force limit price to be 2% above the maximum allowed entry
-            limit = sig.entry_max * 1.02
+            # Limit price set to 3% above entry_max
+            limit = sig.entry_max * 1.03
         else:
-            logger.warning(f"No LTP for {contract.describe()}; using entry_max + 2% as limit.")
+            logger.warning(f"No LTP for {contract.describe()}; using entry_max + 3% as limit.")
             
-            # CHANGED: Apply the same 2% rule even if LTP fetching fails
-            limit = sig.entry_max * 1.02
+            # Fallback limit price set to 3% above entry_max
+            limit = sig.entry_max * 1.03
             
         limit = round_to_tick(limit, tick, "down")
         sl, targets = levels(limit, contract, self.s.sl_pct, self.s.target_pct)
