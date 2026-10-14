@@ -130,9 +130,9 @@ class FnOExecutor:
         if self.s.enforce_market_hours and not self.s.dry_run and not is_market_open(now, self.holidays):
             return await self._reject(sid, f"market closed ({now:%a %H:%M} IST): {desc}")
 
-    contract = self.resolver.resolve(sig.symbol, sig.strike, sig.option_type,
+        contract = self.resolver.resolve(sig.symbol, sig.strike, sig.option_type,
                                          sig.expiry_month, sig.expiry_day, today=now.date())
-          size = size_position(self.s.capital_per_trade, contract.lot_size, sig.entry_max * 1.03, self.s.max_lots)
+        size = size_position(self.s.capital_per_trade, contract.lot_size, sig.entry_max * 1.03, self.s.max_lots)
         if size.lots == 0:
             return await self._reject(
                 sid, f"1 lot of {contract.describe()} costs ₹{size.cost_per_lot:,.0f} "
@@ -144,12 +144,12 @@ class FnOExecutor:
             if ltp > sig.entry_max * (1 + self.s.chase_pct / 100):
                 return await self._reject(sid, f"missed entry: LTP {ltp} > {sig.entry_max} +{self.s.chase_pct}% ({desc})")
             
-            # Limit price set to 3% above entry_max
+            # Force limit price to be 3% above the maximum allowed entry
             limit = sig.entry_max * 1.03
         else:
             logger.warning(f"No LTP for {contract.describe()}; using entry_max + 3% as limit.")
             
-            # Fallback limit price set to 3% above entry_max
+            # Apply the same 3% rule even if LTP fetching fails
             limit = sig.entry_max * 1.03
             
         limit = round_to_tick(limit, tick, "down")
@@ -334,13 +334,13 @@ class FnOExecutor:
             await self.sleep(self.s.poll_interval_sec)
 
     async def _protect(self, sid: str, sig: FnOSignal, contract: Contract, filled: int,
-                       avg: Optional[float]) -> str:
+                        avg: Optional[float]) -> str:
         """Kite: after the fill, a GTT OCO at ±X% of the executed price reported by the broker."""
         if avg is None:
             self.journal.update_signal(sid, J.UNPROTECTED, "executed price unavailable")
             await self.notifier.send(f"🚨 UNPROTECTED: filled {filled} x {contract.describe()} but "
-                                     f"{self.broker.name} did not report the executed price, so no SL/target "
-                                     f"was placed. Place them manually! [{sid}]")
+                                       f"{self.broker.name} did not report the executed price, so no SL/target "
+                                       f"was placed. Place them manually! [{sid}]")
             return J.UNPROTECTED
         sl, targets = levels(avg, contract, self.s.sl_pct, self.s.target_pct)
         tranches = split_tranches(filled // contract.lot_size, targets)
@@ -359,7 +359,7 @@ class FnOExecutor:
         if errors:
             self.journal.update_signal(sid, J.UNPROTECTED, "; ".join(errors))
             await self.notifier.send(f"🚨 UNPROTECTED position {filled} x {contract.describe()} — "
-                                     f"place SL {sl} manually! {errors} [{sid}]")
+                                       f"place SL {sl} manually! {errors} [{sid}]")
             return J.UNPROTECTED
 
         self.journal.update_signal(sid, J.PROTECTED)
@@ -378,7 +378,7 @@ class FnOExecutor:
             # Crashed before any entry was recorded; an order may still have reached the broker.
             self.journal.update_signal(row["signal_id"], J.ERROR, "interrupted before entry was recorded")
             await self.notifier.send(f"🚨 {row['signal_id']} was interrupted before entry was recorded; "
-                                     f"verify no stray order at the broker.")
+                                       f"verify no stray order at the broker.")
         for row in self.journal.pending_signals():
             sid = row["signal_id"]
             logger.info(f"Reconciling {sid} ({row['status']})")
