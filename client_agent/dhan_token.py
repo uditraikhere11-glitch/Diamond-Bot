@@ -57,11 +57,17 @@ def _locked(path: str):
         fcntl.flock(fd, fcntl.LOCK_UN)
         os.close(fd)
 
+def _is_permanent_credential_error(err_msg: str) -> bool:
+    """Detects if the error is due to wrong PIN, invalid client ID, or permanent auth rejection."""
+    text = str(err_msg).lower()
+    permanent_keywords = ["invalid credentials", "wrong pin", "invalid pin", "unauthorized client", "invalid client"]
+    return any(keyword in text for keyword in permanent_keywords)
+
 
 def _execute_with_retries(login: Callable[[], Optional[str]]) -> Optional[str]:
     """
-    Executes the login callback with a strict cap of MAX_LOGIN_RETRIES (5) 
-    and a 5-second delay to prevent 24-hour broker account lockouts.
+    Executes login with a max of 5 retries for transient errors.
+    Fails immediately if a permanent credential error (e.g. wrong PIN) is detected.
     """
     attempts = 0
     while attempts < MAX_LOGIN_RETRIES:
@@ -73,16 +79,22 @@ def _execute_with_retries(login: Callable[[], Optional[str]]) -> Optional[str]:
                 return token
             logger.warning(f"Login attempt {attempts}/{MAX_LOGIN_RETRIES} returned an empty token.")
         except Exception as e:
-            logger.error(f"Login attempt {attempts}/{MAX_LOGIN_RETRIES} encountered an exception: {e}")
+            error_str = str(e)
+            logger.error(f"Login attempt {attempts}/{MAX_LOGIN_RETRIES} encountered an exception: {error_str}")
+            
+            # FAIL-FAST: If the credentials themselves are wrong, retrying won't help 
+            # and will burn the 5-attempt limit, causing a 24-hour lockout. Abort immediately.
+            if _is_permanent_credential_error(error_str):
+                logger.critical("CRITICAL: Permanent credential error detected (e.g., incorrect PIN or Client ID). Aborting immediately to prevent account lockout.")
+                raise SystemExit("Aborted due to invalid credentials.")
             
         if attempts < MAX_LOGIN_RETRIES:
             logger.info("Retrying token generation in 5 seconds...")
             time.sleep(5)
             
-    error_msg = f"CRITICAL: Maximum retry limit ({MAX_LOGIN_RETRIES}) reached for Dhan authentication. Aborting to prevent 24-hour account lockout."
+    error_msg = f"CRITICAL: Maximum retry limit ({MAX_LOGIN_RETRIES}) reached due to transient errors. Aborting."
     logger.critical(error_msg)
     raise SystemExit(error_msg)
-
 
 def fresh_token(rejected: str, login: Callable[[], Optional[str]], path: Optional[str] = None) -> Optional[str]:
     """
