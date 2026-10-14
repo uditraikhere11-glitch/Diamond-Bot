@@ -81,7 +81,7 @@ def _execute_with_retries(login: Callable[[], Optional[str]]) -> Optional[str]:
             
     error_msg = f"CRITICAL: Maximum retry limit ({MAX_LOGIN_RETRIES}) reached for Dhan authentication. Aborting to prevent 24-hour account lockout."
     logger.critical(error_msg)
-    return None
+    raise SystemExit(error_msg)
 
 
 def fresh_token(rejected: str, login: Callable[[], Optional[str]], path: Optional[str] = None) -> Optional[str]:
