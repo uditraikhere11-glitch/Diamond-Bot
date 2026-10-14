@@ -14,12 +14,14 @@ token ("DH-906 Invalid Token"). Instead, both keep the current token in one file
 import fcntl
 import logging
 import os
+import time
 from contextlib import contextmanager
 from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
 TOKEN_FILE = os.environ.get("DHAN_TOKEN_FILE") or os.path.join(os.path.expanduser("~"), ".dhan_token")
+MAX_LOGIN_RETRIES = 5
 
 
 def is_token_error(status_code: int, body) -> bool:
@@ -56,12 +58,38 @@ def _locked(path: str):
         os.close(fd)
 
 
+def _execute_with_retries(login: Callable[[], Optional[str]]) -> Optional[str]:
+    """
+    Executes the login callback with a strict cap of MAX_LOGIN_RETRIES (5) 
+    and a 5-second delay to prevent 24-hour broker account lockouts.
+    """
+    attempts = 0
+    while attempts < MAX_LOGIN_RETRIES:
+        attempts += 1
+        try:
+            token = login()
+            if token:
+                logger.info(f"Dhan authentication successful on attempt {attempts}.")
+                return token
+            logger.warning(f"Login attempt {attempts}/{MAX_LOGIN_RETRIES} returned an empty token.")
+        except Exception as e:
+            logger.error(f"Login attempt {attempts}/{MAX_LOGIN_RETRIES} encountered an exception: {e}")
+            
+        if attempts < MAX_LOGIN_RETRIES:
+            logger.info("Retrying token generation in 5 seconds...")
+            time.sleep(5)
+            
+    error_msg = f"CRITICAL: Maximum retry limit ({MAX_LOGIN_RETRIES}) reached for Dhan authentication. Aborting to prevent 24-hour account lockout."
+    logger.critical(error_msg)
+    raise SystemExit(error_msg)
+
+
 def fresh_token(rejected: str, login: Callable[[], Optional[str]], path: Optional[str] = None) -> Optional[str]:
     """
     Return a usable token after `rejected` failed (pass "" when there is no token yet).
 
     Adopts a newer token from the shared file if another bot already logged in; otherwise calls
-    `login()` (which returns the new token or None) and shares the result.
+    `login()` via the retry wrapper and shares the result.
     """
     path = path or TOKEN_FILE
     with _locked(path):
@@ -69,17 +97,17 @@ def fresh_token(rejected: str, login: Callable[[], Optional[str]], path: Optiona
         if shared and shared != rejected:
             logger.info("Using the Dhan token shared by the other bot (no new login needed).")
             return shared
-        token = login()
+        token = _execute_with_retries(login)
         if token:
             _write_token(token, path)
         return token
 
 
 def force_login(login: Callable[[], Optional[str]], path: Optional[str] = None) -> Optional[str]:
-    """Scheduled daily refresh: always log in, then share the new token."""
+    """Scheduled daily refresh: always log in with retries, then share the new token."""
     path = path or TOKEN_FILE
     with _locked(path):
-        token = login()
+        token = _execute_with_retries(login)
         if token:
             _write_token(token, path)
         return token
