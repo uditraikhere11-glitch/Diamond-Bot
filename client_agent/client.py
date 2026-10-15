@@ -29,7 +29,7 @@ import logging
 import time as time_mod
 import requests
 from datetime import datetime, time, timedelta, timezone
-from client_agent.notifier import Notifier
+from notifier import Notifier
 
 try:  # imported as client_agent.client (tests, fno_agent)
     from client_agent.dhan_token import fresh_token, is_token_error
